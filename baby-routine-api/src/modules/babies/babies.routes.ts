@@ -5,6 +5,8 @@ import {
   createBabySchema,
   updateBabySchema,
   babyIdParamsSchema,
+  addCaregiverSchema,
+  caregiverParamsSchema,
 } from './babies.schemas';
 import * as babiesController from './babies.controller';
 
@@ -39,6 +41,25 @@ router.delete(
   '/:id',
   validate({ params: babyIdParamsSchema }),
   babiesController.remove
+);
+
+// Caregiver routes
+router.post(
+  '/:id/caregivers',
+  validate({ params: babyIdParamsSchema, body: addCaregiverSchema }),
+  babiesController.addCaregiver
+);
+
+router.get(
+  '/:id/caregivers',
+  validate({ params: babyIdParamsSchema }),
+  babiesController.listCaregivers
+);
+
+router.delete(
+  '/:id/caregivers/:userId',
+  validate({ params: caregiverParamsSchema }),
+  babiesController.removeCaregiver
 );
 
 export default router;

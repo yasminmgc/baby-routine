@@ -22,5 +22,15 @@ export const babyIdParamsSchema = z.object({
   id: z.string().uuid('Invalid baby ID'),
 });
 
+export const addCaregiverSchema = z.object({
+  email: z.string().email('Invalid email'),
+});
+
+export const caregiverParamsSchema = z.object({
+  id: z.string().uuid('Invalid baby ID'),
+  userId: z.string().uuid('Invalid user ID'),
+});
+
 export type CreateBabyInput = z.infer<typeof createBabySchema>;
 export type UpdateBabyInput = z.infer<typeof updateBabySchema>;
+export type AddCaregiverInput = z.infer<typeof addCaregiverSchema>;

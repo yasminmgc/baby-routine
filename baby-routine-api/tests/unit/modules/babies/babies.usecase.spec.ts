@@ -4,6 +4,9 @@ import {
   GetBabyUseCase,
   UpdateBabyUseCase,
   DeleteBabyUseCase,
+  AddCaregiverUseCase,
+  RemoveCaregiverUseCase,
+  ListCaregiversUseCase,
 } from 'src/modules/babies/babies.usecase';
 import * as babiesRepository from 'src/modules/babies/babies.repository';
 
@@ -367,5 +370,258 @@ describe('DeleteBabyUseCase', () => {
       expect(error.code).toBe('FORBIDDEN');
     }
     expect(mockedRepo.remove).not.toHaveBeenCalled();
+  });
+});
+
+describe('AddCaregiverUseCase', () => {
+  let useCase: AddCaregiverUseCase;
+
+  beforeEach(() => {
+    useCase = new AddCaregiverUseCase();
+    jest.clearAllMocks();
+  });
+
+  it('should add caregiver by email successfully', async () => {
+    const babyId = 'baby-1';
+    const currentUserId = 'user-1';
+    const email = 'newcaregiver@example.com';
+
+    mockedRepo.findCaregiver.mockResolvedValue({
+      id: 'cg-req',
+      babyId,
+      userId: currentUserId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+
+    const targetUser = {
+      id: 'user-2',
+      name: 'New Caregiver',
+      email,
+      passwordHash: 'hash',
+      fcmToken: null,
+      createdAt: new Date(),
+    };
+
+    mockedRepo.findUserByEmail.mockResolvedValue(targetUser);
+    mockedRepo.findCaregiver.mockResolvedValueOnce({
+      id: 'cg-req',
+      babyId,
+      userId: currentUserId,
+      role: 'owner',
+      createdAt: new Date(),
+    }).mockResolvedValueOnce(null); // second call: check if target already caregiver
+
+    mockedRepo.addCaregiver.mockResolvedValue({
+      id: 'cg-new',
+      babyId,
+      userId: 'user-2',
+      role: 'caregiver',
+      createdAt: new Date(),
+      user: { id: 'user-2', name: 'New Caregiver', email },
+    } as any);
+
+    const result = await useCase.execute(babyId, currentUserId, email);
+
+    expect(mockedRepo.findUserByEmail).toHaveBeenCalledWith(email);
+    expect(mockedRepo.addCaregiver).toHaveBeenCalledWith(babyId, 'user-2', 'caregiver');
+    expect(result).toEqual({ message: 'Caregiver added successfully.' });
+  });
+
+  it('should throw 403 when requester is not a caregiver', async () => {
+    mockedRepo.findCaregiver.mockResolvedValue(null);
+
+    await expect(useCase.execute('baby-1', 'unauthorized', 'someone@example.com'))
+      .rejects.toThrow('Access denied');
+  });
+
+  it('should throw 404 when target user not found', async () => {
+    mockedRepo.findCaregiver.mockResolvedValue({
+      id: 'cg-req',
+      babyId: 'baby-1',
+      userId: 'user-1',
+      role: 'owner',
+      createdAt: new Date(),
+    });
+    mockedRepo.findUserByEmail.mockResolvedValue(null);
+
+    await expect(useCase.execute('baby-1', 'user-1', 'nonexistent@example.com'))
+      .rejects.toThrow('User not found with this email');
+  });
+
+  it('should throw 409 when user is already a caregiver', async () => {
+    const babyId = 'baby-1';
+    const currentUserId = 'user-1';
+    const email = 'existing@example.com';
+
+    mockedRepo.findCaregiver.mockResolvedValueOnce({
+      id: 'cg-req',
+      babyId,
+      userId: currentUserId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+
+    mockedRepo.findUserByEmail.mockResolvedValue({
+      id: 'user-2',
+      name: 'Existing',
+      email,
+      passwordHash: 'hash',
+      fcmToken: null,
+      createdAt: new Date(),
+    });
+
+    mockedRepo.findCaregiver.mockResolvedValueOnce({
+      id: 'cg-existing',
+      babyId,
+      userId: 'user-2',
+      role: 'caregiver',
+      createdAt: new Date(),
+    });
+
+    await expect(useCase.execute(babyId, currentUserId, email))
+      .rejects.toThrow('User is already a caregiver for this baby');
+    try {
+      await useCase.execute(babyId, currentUserId, email);
+    } catch (error: any) {
+      expect(error.statusCode).toBe(409);
+      expect(error.code).toBe('CONFLICT');
+    }
+  });
+});
+
+describe('RemoveCaregiverUseCase', () => {
+  let useCase: RemoveCaregiverUseCase;
+
+  beforeEach(() => {
+    useCase = new RemoveCaregiverUseCase();
+    jest.clearAllMocks();
+  });
+
+  it('should remove caregiver when requester is owner', async () => {
+    const babyId = 'baby-1';
+    const targetUserId = 'user-2';
+    const currentUserId = 'user-1';
+
+    mockedRepo.findCaregiver.mockResolvedValueOnce({
+      id: 'cg-req',
+      babyId,
+      userId: currentUserId,
+      role: 'owner',
+      createdAt: new Date(),
+    }).mockResolvedValueOnce({
+      id: 'cg-target',
+      babyId,
+      userId: targetUserId,
+      role: 'caregiver',
+      createdAt: new Date(),
+    });
+
+    mockedRepo.removeCaregiver.mockResolvedValue({} as any);
+
+    const result = await useCase.execute(babyId, targetUserId, currentUserId);
+
+    expect(mockedRepo.removeCaregiver).toHaveBeenCalledWith(babyId, targetUserId);
+    expect(result).toEqual({ message: 'Caregiver removed successfully.' });
+  });
+
+  it('should throw 403 when requester is not a caregiver', async () => {
+    mockedRepo.findCaregiver.mockResolvedValue(null);
+
+    await expect(useCase.execute('baby-1', 'user-2', 'unauthorized'))
+      .rejects.toThrow('Access denied');
+  });
+
+  it('should throw 403 when requester is caregiver but not owner', async () => {
+    mockedRepo.findCaregiver.mockResolvedValue({
+      id: 'cg-req',
+      babyId: 'baby-1',
+      userId: 'user-2',
+      role: 'caregiver',
+      createdAt: new Date(),
+    });
+
+    await expect(useCase.execute('baby-1', 'user-3', 'user-2'))
+      .rejects.toThrow('Only the owner can perform this action');
+  });
+
+  it('should throw 404 when target caregiver not found', async () => {
+    const babyId = 'baby-1';
+    const currentUserId = 'user-1';
+
+    mockedRepo.findCaregiver.mockResolvedValueOnce({
+      id: 'cg-req',
+      babyId,
+      userId: currentUserId,
+      role: 'owner',
+      createdAt: new Date(),
+    }).mockResolvedValueOnce(null); // target not found
+
+    await expect(useCase.execute(babyId, 'nonexistent', currentUserId))
+      .rejects.toThrow('Caregiver not found for this baby');
+  });
+});
+
+describe('ListCaregiversUseCase', () => {
+  let useCase: ListCaregiversUseCase;
+
+  beforeEach(() => {
+    useCase = new ListCaregiversUseCase();
+    jest.clearAllMocks();
+  });
+
+  it('should list caregivers for a baby when user is caregiver', async () => {
+    const babyId = 'baby-1';
+    const userId = 'user-1';
+
+    mockedRepo.findCaregiver.mockResolvedValue({
+      id: 'cg-req',
+      babyId,
+      userId,
+      role: 'owner',
+      createdAt: new Date(),
+    });
+
+    const fakeCaregivers = [
+      {
+        id: 'cg-1',
+        babyId,
+        userId: 'user-1',
+        role: 'owner',
+        createdAt: new Date('2025-01-01'),
+        user: { id: 'user-1', name: 'Owner User', email: 'owner@example.com' },
+      },
+      {
+        id: 'cg-2',
+        babyId,
+        userId: 'user-2',
+        role: 'caregiver',
+        createdAt: new Date('2025-02-01'),
+        user: { id: 'user-2', name: 'Caregiver User', email: 'caregiver@example.com' },
+      },
+    ];
+
+    mockedRepo.listCaregivers.mockResolvedValue(fakeCaregivers as any);
+
+    const result = await useCase.execute(babyId, userId);
+
+    expect(mockedRepo.listCaregivers).toHaveBeenCalledWith(babyId);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({
+      id: 'cg-1',
+      userId: 'user-1',
+      name: 'Owner User',
+      email: 'owner@example.com',
+      role: 'owner',
+      createdAt: fakeCaregivers[0].createdAt,
+    });
+    expect(result[1].role).toBe('caregiver');
+  });
+
+  it('should throw 403 when user is not a caregiver', async () => {
+    mockedRepo.findCaregiver.mockResolvedValue(null);
+
+    await expect(useCase.execute('baby-1', 'unauthorized'))
+      .rejects.toThrow('Access denied');
   });
 });

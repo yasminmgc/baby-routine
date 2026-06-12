@@ -128,3 +128,74 @@ export class DeleteBabyUseCase {
     await babiesRepository.remove(babyId);
   }
 }
+
+export class AddCaregiverUseCase {
+  async execute(babyId: string, currentUserId: string, email: string) {
+    const requesterCaregiver = await babiesRepository.findCaregiver(babyId, currentUserId);
+
+    if (!requesterCaregiver) {
+      throw new AppError('Access denied', 403, 'FORBIDDEN');
+    }
+
+    const targetUser = await babiesRepository.findUserByEmail(email);
+
+    if (!targetUser) {
+      throw new AppError('User not found with this email', 404, 'NOT_FOUND');
+    }
+
+    const existingCaregiver = await babiesRepository.findCaregiver(babyId, targetUser.id);
+
+    if (existingCaregiver) {
+      throw new AppError('User is already a caregiver for this baby', 409, 'CONFLICT');
+    }
+
+    await babiesRepository.addCaregiver(babyId, targetUser.id, 'caregiver');
+
+    return { message: 'Caregiver added successfully.' };
+  }
+}
+
+export class RemoveCaregiverUseCase {
+  async execute(babyId: string, targetUserId: string, currentUserId: string) {
+    const requesterCaregiver = await babiesRepository.findCaregiver(babyId, currentUserId);
+
+    if (!requesterCaregiver) {
+      throw new AppError('Access denied', 403, 'FORBIDDEN');
+    }
+
+    if (requesterCaregiver.role !== 'owner') {
+      throw new AppError('Only the owner can perform this action', 403, 'FORBIDDEN');
+    }
+
+    const targetCaregiver = await babiesRepository.findCaregiver(babyId, targetUserId);
+
+    if (!targetCaregiver) {
+      throw new AppError('Caregiver not found for this baby', 404, 'NOT_FOUND');
+    }
+
+    await babiesRepository.removeCaregiver(babyId, targetUserId);
+
+    return { message: 'Caregiver removed successfully.' };
+  }
+}
+
+export class ListCaregiversUseCase {
+  async execute(babyId: string, userId: string) {
+    const caregiver = await babiesRepository.findCaregiver(babyId, userId);
+
+    if (!caregiver) {
+      throw new AppError('Access denied', 403, 'FORBIDDEN');
+    }
+
+    const caregivers = await babiesRepository.listCaregivers(babyId);
+
+    return caregivers.map((cg) => ({
+      id: cg.id,
+      userId: cg.user.id,
+      name: cg.user.name,
+      email: cg.user.email,
+      role: cg.role,
+      createdAt: cg.createdAt,
+    }));
+  }
+}

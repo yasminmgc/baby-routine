@@ -34,3 +34,29 @@ export async function findAllByUser(userId: string) {
 export function getClient() {
   return prisma;
 }
+
+export async function findUserByEmail(email: string) {
+  return prisma.user.findUnique({ where: { email } });
+}
+
+export async function addCaregiver(babyId: string, userId: string, role: string = 'caregiver') {
+  return prisma.babyCaregiver.create({
+    data: { babyId, userId, role },
+    include: { user: { select: { id: true, name: true, email: true } } },
+  });
+}
+
+export async function removeCaregiver(babyId: string, userId: string) {
+  return prisma.babyCaregiver.delete({
+    where: { babyId_userId: { babyId, userId } },
+  });
+}
+
+export async function listCaregivers(babyId: string) {
+  return prisma.babyCaregiver.findMany({
+    where: { babyId },
+    include: {
+      user: { select: { id: true, name: true, email: true } },
+    },
+  });
+}
