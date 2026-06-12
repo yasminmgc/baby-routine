@@ -50,80 +50,96 @@ Started: 2026-06-12
 - Event screen pattern: try/catch around controller call, then check `ref.read(eventControllerProvider)` state for error/success (same as baby controller pattern)
 - Time picker pattern: showTimePicker with 24-hour format, pt-BR locale override via Localizations.override, display formatted time via _timeLabel helper
 - ChoiceChip pattern: Wrap widget with spacing 8, selected with lilacDark background and white text, unselected with white background and dark text
+- Reports chart pattern: fl_chart BarChart with stacked bars for feeding/diapers (grouped bar rods with different colors), LineChart for growth, list for medication; charts wrapped in SizedBox(height: 280-300); legends use colored squares with labels
+- Note dialog pattern: showDialog with AlertDialog, Form+TextFormField for content with maxLength+validator, create/update via controller
 
 ---
 
-## Story Plan
-
-### US-001: Initialize backend project and database schema
-### US-002: Set up core configuration and shared infrastructure
-### US-003: Implement auth module (register, login, FCM token)
-### US-004: Implement users and babies modules
-### US-005: Implement caregivers management and events module
-### US-006: Implement routines and reminders modules
-### US-007: Implement health, measurements, and notes modules
-### US-008: Implement reports and daily checklist
-### US-009: Add Swagger documentation to all backend routes
-### US-010: Implement notification cron job
-### US-011: Write backend tests (unit + integration)
-### US-012: Initialize Flutter project and core infrastructure
-### US-013: Set up networking, theme, navigation, shared widgets, and providers
-### US-014: Implement auth feature screens (splash, login, register)
-### US-015: Implement babies feature screens
-### US-016: Implement home screen and checklist widget
-### US-017: Implement events feature screens (feeding, sleep, diaper)
-### US-018 through US-020: remaining stories
+## Story Plan (US-001 through US-020 defined — see initial plan)
 
 ## 2015-06-12 - US-001 through US-015 (summarized)
-(Completed in earlier sessions — see previous progress entries)
+(Completed in earlier sessions)
 
 ## 2026-06-12 - US-016: Implement home screen and checklist widget
-- Created lib/features/home/models/checklist_item.dart: ChecklistItem and ChecklistResponse models with @JsonSerializable()
-- Created lib/features/home/models/checklist_item.g.dart: Manual JSON serialization (fromJson/toJson)
-- Created lib/features/home/repositories/checklist_repository.dart: Abstract interface with fetch(babyId, {date})
-- Created lib/features/home/repositories/checklist_repository_impl.dart: DioClient impl calling GET /babies/:babyId/checklist
-- Created lib/features/home/controllers/checklist_controller.dart: AsyncNotifierProvider<ChecklistController, ChecklistResponse> with build() reading selectedBabyProvider, refresh() method
-- Rewrote lib/features/home/presentation/home_screen.dart: Full implementation
-- Created lib/features/home/presentation/checklist_widget.dart: Full implementation
-- Wrote 3 test files (35 new tests)
-- Files changed: 10 files (9 new, 1 modified)
----
+- Created 10 files (checklist model + g.dart, repository, controller, home screen, checklist widget, 3 test files)
+- 35 new tests written
+
 ## 2026-06-12 - US-017: Implement events feature screens (feeding, sleep, diaper)
-- Created lib/features/events/models/routine_event.dart: RoutineEvent model with @JsonSerializable() (id, eventType, scheduledAt, occurredAt, status, details Map, notes)
-- Created lib/features/events/models/routine_event.g.dart: Manual JSON serialization (fromJson/toJson)
-- Created lib/features/events/repositories/event_repository.dart: Abstract interface (create, list, getById, update, delete)
-- Created lib/features/events/repositories/event_repository_impl.dart: DioClient impl calling /babies/:babyId/events endpoints
-- Created lib/features/events/controllers/event_controller.dart: AsyncNotifierProvider<EventController, void> with createEvent, listEvents, updateEvent, deleteEvent. Uses selectedBabyProvider for babyId.
-- Implemented lib/features/events/presentation/feeding_screen.dart:
-  - Dropdown: Tipo de alimentação (Mamadeira/Peito/Sólidos)
-  - Quantity (ml) and duration (min) number fields
-  - Observations field
-  - Loading spinner, success/error snackbar, pt-BR labels
-  - Navigate to /home on success
-- Implemented lib/features/events/presentation/sleep_screen.dart:
-  - Start/end time pickers with 24h format, pt-BR locale
-  - Auto-calculated duration display (minutes/hours)
-  - Location dropdown (Berço/Cama/Colo)
-  - Manual validation: requires both times selected
-  - Submit with details: startTime, endTime, durationMin, location
-- Implemented lib/features/events/presentation/diaper_screen.dart:
-  - Type: ChoiceChips (Xixi/Cocô/Ambos) with icons
-  - Color: conditional picker (yellow for pee; yellow/green/brown for poop/both)
-  - Consistency dropdown (Normal/Pastosa/Líquida)
-  - Rash toggle with dynamic label
-  - Auto-sets color=yellow for pee type
-- Wrote 4 test files (46 new tests):
-  - test/unit/models/routine_event_test.dart: 13 tests (fromJson all fields, null optionals, toJson, omit nulls, copyWith, equality, different details, hashCode, toString, sleep event details, diaper event details, all event types, all statuses)
-  - test/widget/feeding_screen_test.dart: 10 tests (title, dropdown, fields, notes, buttons, loading, error, cancel enabled, dropdown options, theme)
-  - test/widget/sleep_screen_test.dart: 10 tests (title, time pickers, location, notes, buttons, error on empty times, error snackbar, theme, dropdown options, default labels)
-  - test/widget/diaper_screen_test.dart: 13 tests (title, type labels, 3 chips, consistency, rash toggle, toggle changes, notes, buttons, error snackbar, theme, loading, consistency options, poop type shows color options)
+- Created 13 files (event model + g.dart, repository + impl, controller, 3 screen files, 4 test files)
+- 46 new tests written
+
+## 2026-06-12 - US-018: Implement events feature screens (bath, appointment, vaccination, medication)
+- Implemented 4 event screens following US-017 patterns:
+  - BathScreen: temperature dropdown (Morna/Quente/Fria) + notes + submit
+  - AppointmentScreen: professional name (required), specialty, appointment type (Rotina/Urgente) dropdown, recommendations, requested exams (add/remove chips), notes
+  - VaccinationScreen: vaccine name (required), lot, site dropdown (Coxa esquerda/direita, Braço esquerdo/direito), applied by, reactions, notes
+  - MedicationScreen: medication name (required), dose, reason, notes
+- All screens use EventController, pt-BR labels, navigate to /home on success
+- Router already had routes registered for /bath, /appointment, /vaccination, /medication
+- Home screen already had quick action buttons for Banho, Vacina, Consulta, Medicação
+- Created medication_screen_test.dart (12 tests) — other test files already existed (bath: 10, appointment: 13, vaccination: 13)
+- Total: 4 screen implementations + 48 widget tests across 4 test files
 - **Learnings:**
-  - Event API endpoints: POST/GET /babies/:babyId/events, GET/PUT/DELETE /babies/:babyId/events/:id
-  - Event details JSONB stored as Map<String, dynamic> in Flutter; serialized as JSON object to API
-  - DateTime fields serialize to ISO 8601; DateTime? fields omitted when null
-  - Time picker requires MediaQuery with alwaysUse24HourFormat and Localizations.override for pt-BR
-  - ChoiceChip selected/unselected states use lilacDark palette
-  - All 3 screens follow same pattern: try/catch → ref.read(controller) → check state.hasError for snackbar
-  - Navigation on success uses context.go('/home') to replace stack
-- Files changed: 13 files (9 new, 3 modified, 1 updated progress)
+  - Appointment screen uses Chip with deleteIcon for requestedExams list (add/remove pattern)
+  - Each screen validates at least one required field before submission (professional name for appointment, vaccine name for vaccination, medication name for medication)
+  - Bath screen is the simplest — just a dropdown + notes (no required text fields to validate)
+  - All screens share the same error/success pattern from US-017
+- Files changed: 8 files (4 screens modified, 4 test files created)
+
+## 2026-06-12 - US-019: Implement routines, health, reports, and notes screens
+
+### Routines (already had model/repo/controller/screen stubs)
+- Routine model (.dart + .g.dart): id, babyId, activityType, intervalMinutes, defaultStartTime, active, createdAt, updatedAt
+- RoutineRepository/Impl: create, list, update, delete, toggle (PATCH /toggle)
+- RoutineController: AsyncNotifier<void> with createRoutine, listRoutines, updateRoutine, deleteRoutine, toggleRoutine
+- ConfigureRoutinesScreen: list with toggle Switch, FAB for add dialog, edit/delete per item
+- Activity type dropdown with 9 options (Alimentação, Sono, Banho, Fralda, Medicação, Vacina, Consulta, Exame, Passeio)
+
+### Health
+- Created HealthRecord model + .g.dart (id, babyId, userId, recordType, title, description, occurredAt, createdAt)
+- Created HealthRepository interface + HealthRepositoryImpl (GET /babies/:id/health?type=)
+- Created HealthController (AsyncNotifier<void>, listHealthRecords returns Future<List<HealthRecord>>)
+- HealthHistoryScreen: ChoiceChip filter (Todos, Consulta, Vacina, Medicamento, Exame), list of HealthRecordItem widgets with icon color by type, pull-to-refresh
+
+### Reports
+- Created 5 report models (SleepReportItem, FeedingReportItem, DiapersReportItem, GrowthReportItem, MedicationReportItem) + .g.dart
+- Created ReportRepository interface + ReportRepositoryImpl (5 endpoints: /sleep, /feeding, /diapers, /growth, /medication with date range params)
+- Created ReportController (AsyncNotifier<void>, 5 methods returning Future<List<T>>)
+- ReportsScreen: 5 ChoiceChip report selectors (Sono, Alimentação, Fraldas, Crescimento, Medicação), date range picker, fl_chart visualizations:
+  - Sleep: BarChart with hours of sleep per day (purple bars)
+  - Feeding: Stacked BarChart with Mamadeira/Peito/Sólidos legend
+  - Diapers: Stacked BarChart with Xixi/Cocô/Ambos legend
+  - Growth: LineChart with weight curve (kg), curved line with dots
+  - Medication: Card list with medication name, dose, reason, date
+
+### Notes
+- Created Note model + .g.dart (id, babyId, content, createdAt) with copyWith
+- Created NoteRepository interface + NoteRepositoryImpl (POST, GET, PUT /:id, DELETE /:id)
+- Created NoteController (AsyncNotifier<void> with createNote, listNotes, updateNote, deleteNote)
+- NotesScreen: list with relative time formatting (Agora mesmo/Há X min/Há X h/date), FAB for add dialog, PopupMenuButton for edit/delete per item, swipe-to-delete (Dismissible)
+
+### Tests (89 new tests total)
+- test/widget/configure_routines_screen_test.dart: 11 tests (title, list, details, switches, empty state, edit/delete icons, FAB, error, refresh, add dialog, delete dialog)
+- test/widget/health_history_screen_test.dart: 11 tests (title, filter chips, records, dates, translated types, empty, error, loading, refresh, record type icons)
+- test/widget/reports_screen_test.dart: 15 tests (title, 5 chips, date picker, sleep chart, feeding chart with legend, diapers chart with legend, growth chart, medication list/details, empty, error, loading)
+- test/widget/notes_screen_test.dart: 11 tests (title, notes content, relative time, full date, FAB, empty, error, loading, add dialog, popup menu, refresh)
+- test/unit/models/health_record_test.dart: 8 tests (fromJson full, fromJson nulls, toJson, toJson omits nulls, equality, hashCode, toString, inequality)
+- test/unit/models/note_test.dart: 7 tests (fromJson, toJson, copyWith update, copyWith preserve, equality, inequality, toString)
+- test/unit/models/report_data_test.dart: 16 tests (Sleep fromJson/toJson, Feeding fromJson/toJson, Diapers fromJson/toJson, Growth full/null/toJson omit/toJson full, Medication full/null/toJson omit)
+- test/unit/models/routine_test.dart: 10 tests (fromJson full, fromJson nulls, toJson, toJson omits, copyWith update, copyWith preserve, equality, inequality, toString)
+
+### Files:
+- Created: health_record.g.dart, health_repository.dart, health_repository_impl.dart, health_controller.dart, report_data.dart, report_data.g.dart, report_repository.dart, report_repository_impl.dart, report_controller.dart, note.dart, note.g.dart, note_repository.dart, note_repository_impl.dart, note_controller.dart (14 new source files)
+- Modified: health_history_screen.dart, reports_screen.dart, notes_screen.dart (3 screen rewrites)
+- Tests: 8 new test files (89 total tests)
+
+### Learnings:
+- Reports screen uses fl_chart: BarChart with BarChartGroupData for stacked bars, BarChartRodData for individual bars, LineChart with FlSpot for growth curve
+- Charts use SizedBox(height: 280-300) constraints, AppColors for chart colors
+- fl_chart FlTitlesData with getTitlesWidget for axis labels, SideTitles with reservedSize for spacing
+- Date range picker: showDateRangePicker with pt_BR locale, Theme wrapper for lilac color scheme
+- Report controller fetches directly from repository, no state management needed (data managed locally in screen state)
+- Health type filter: backend uses enum values (appointment, vaccination, medication, exam), frontend maps to pt-BR labels
+- Notes relative time: difference.inMinutes < 1 → "Agora mesmo", < 60 → "Há X min", < 24 → "Há X h", else formatted date
+- PopupMenuButton<String> with onSelected callback for edit/delete actions on notes
 ---
