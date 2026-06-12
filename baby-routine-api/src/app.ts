@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { errorMiddleware } from './shared/middlewares/error.middleware';
 import { setupSwagger } from './config/swagger';
+import authRoutes from './modules/auth/auth.routes';
 
 const app = express();
 
@@ -16,7 +17,8 @@ app.get('/api/v1/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Routes will be registered here as modules are implemented
+// Routes
+app.use('/api/v1/auth', authRoutes);
 
 // Global error handler (must be after routes)
 app.use(errorMiddleware);
