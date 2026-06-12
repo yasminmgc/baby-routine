@@ -3,6 +3,8 @@ import cors from 'cors';
 import { errorMiddleware } from './shared/middlewares/error.middleware';
 import { setupSwagger } from './config/swagger';
 import authRoutes from './modules/auth/auth.routes';
+import usersRoutes from './modules/users/users.routes';
+import babiesRoutes from './modules/babies/babies.routes';
 
 const app = express();
 
@@ -19,6 +21,8 @@ app.get('/api/v1/health', (_req, res) => {
 
 // Routes
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/users', usersRoutes);
+app.use('/api/v1/babies', babiesRoutes);
 
 // Global error handler (must be after routes)
 app.use(errorMiddleware);
