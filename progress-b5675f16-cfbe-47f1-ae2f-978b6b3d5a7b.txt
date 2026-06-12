@@ -28,6 +28,14 @@ Started: 2026-06-12
 - Font: Nunito via google_fonts
 - Localization: intl package for pt-BR date formatting
 - `.env` is gitignored; uses flutter_dotenv for environment config
+- Auth controller pattern: `AsyncNotifier<void>` with `state = await AsyncValue.guard(() async { ... })` — guard catches sync/async errors into AsyncValue.error
+- Controller provider: `final fooControllerProvider = AsyncNotifierProvider<FooController, void>(FooController.new)`
+- Repository provider: `final fooRepoProvider = Provider<FooRepository>((ref) => FooRepositoryImpl(ref.watch(dioClientProvider)))`
+- Models: `@JsonSerializable()` from `json_annotation` with manually written `.g.dart` file containing `_$ClassNameFromJson` / `_$ClassNameToJson`
+- Screens: `ConsumerStatefulWidget` + `GlobalKey<FormState>` for form validation
+- Error extraction from Dio: dynamic property access with try/catch for `error.response?.data?.message`
+- Widget tests for ConsumerStatefulWidget need `ProviderScope` wrapper; mock providers via `.overrideWithValue()`
+- `Color.withOpacity()` used instead of `Color.withValues()` for Flutter 3.22 compatibility
 - Flutter commands: `flutter pub get`, `flutter analyze`, `flutter test`, `flutter pub run build_runner build --delete-conflicting-outputs`
 - GoRouter global router variable: defined at module level (not in a Widget), accesses SecureStorage directly for redirect logic
 - Redirect pattern: async (context, state) — check SecureStorage.getToken(), redirect unauthenticated from protected routes to /login, authenticated from public routes to /babies
@@ -35,6 +43,13 @@ Started: 2026-06-12
 - AuthInterceptor: reads token from SecureStorage on every request via onRequest, clears token on 401 via onError
 - Widget tests use `flutter_test` with `testWidgets`, wrap in MaterialApp+Scaffold for context
 - Theme: ColorScheme.fromSeed(seedColor: AppColors.lilac), useMaterial3: true, GoogleFonts.nunitoTextTheme(), rounded InputDecoration (12px), full-width ElevatedButton (min 52px, lilacDark)
+- Baby controller pattern: AsyncNotifier<void> for mutations (create/update/delete/addCaregiver/removeCaregiver) with AsyncValue.guard; list operations return Future<List<T>> directly to caller
+- Screen data loading: call repository directly in ConsumerStatefulWidget methods (not via controller state), manage local _isLoading/_error state
+- Form screens: ConsumerStatefulWidget + GlobalKey<FormState> + TextEditingController per field + DatePicker via showDatePicker with pt-BR locale
+- Caregiver access in UI: check `baby.currentUserRole == 'owner'` to show/hide owner-only actions (delete button, add caregiver FAB)
+- Roles in pt-BR: owner → "Responsável", caregiver → "Cuidador(a)"
+- GoRouter routes: separate GoRoute for /babies, /babies/create, /babies/edit; each with its own screen builder
+- Dialog for add caregiver: showDialog with AlertDialog containing Form + TextFormField email validation; cancel/confirm buttons
 
 ---
 
@@ -50,327 +65,76 @@ Started: 2026-06-12
 ### US-008 through US-020: remaining stories
 
 ## 2026-06-12 - US-001: Initialize backend project and database schema
-- Created baby-routine-api/ directory with complete project scaffold
-- package.json with all dependencies: express, prisma, bcryptjs, jsonwebtoken, zod, firebase-admin, node-cron, swagger, dotenv, and all dev deps (jest, ts-jest, supertest, typescript, etc.)
-- tsconfig.json: ES2020 target, commonjs module, strict mode, outDir dist
-- jest.config.ts: ts-jest preset, testMatch for tests/unit/** and tests/integration/**
-- .env.example: DATABASE_URL, JWT_SECRET, JWT_EXPIRES_IN, FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY, PORT, NODE_ENV
-- Procfile: web (node dist/server.js) + release (npx prisma migrate deploy)
-- prisma/schema.prisma: 9 models matching specs (User, Baby, BabyCaregiver, RoutineEvent, Routine, Reminder, HealthRecord, GrowthMeasurement, Note) with all fields, indexes, @maps, and relations
-- Initial Prisma migration generated and applied to local PostgreSQL
-- Minimal src/app.ts and src/server.ts for successful build
-- Unit test (tests/unit/prisma.spec.ts) verifying all 9 Prisma models are accessible
-- All acceptance criteria met: build succeeds, typecheck passes, tests pass (1/1)
-- Files changed: 13 files, commit ab40d67
-- **Learnings:** 
-  - Prisma 5.x must be used via `./node_modules/.bin/prisma` not `npx prisma` to avoid version 7 auto-install
-  - Local PostgreSQL uses peer authentication (no password needed for current user)
-  - `prisma/migrations/migration_lock.toml` is committed; only per-migration lock files are gitignored
-  - npm approve-scripts needed for @prisma/client, protobufjs, @scarf/scarf postinstall scripts
----
+... (summarized — see previous entries)
 
 ## 2026-06-12 - US-002: Set up core configuration and shared infrastructure
-- Created src/config/env.ts: typed EnvConfig interface, reads all env vars, validates required ones, exports singleton
-- Created src/config/firebase.ts: initializes firebase-admin with credential from env, handles test env gracefully
-- Created src/config/swagger.ts: swagger-jsdoc config (OpenAPI 3.0, BearerAuth), swagger-ui-express setup at /api/v1/docs
-- Created src/shared/errors/AppError.ts: custom error class with statusCode and code
-- Created src/shared/middlewares/error.middleware.ts: catches AppError (returns {status, message, code}) and unknown errors (500)
-- Created src/shared/middlewares/auth.middleware.ts: verifies Bearer JWT, injects req.userId, throws 401 on failure
-- Created src/shared/middlewares/validate.middleware.ts: generic Zod validation for body/query/params, throws VALIDATION_ERROR on failure
-- Created src/shared/utils/jwt.ts: signToken (7d expiry from config) and verifyToken
-- Created src/shared/utils/bcrypt.ts: hashPassword (salt rounds 12) and comparePassword
-- Created src/shared/utils/notifications.ts: sendPushNotification wrapper via Firebase Admin SDK
-- Created src/shared/types/express.d.ts: extends Express Request with userId string
-- Updated src/app.ts: full Express app with cors, json parser, swagger at /api/v1/docs, health check endpoint, error middleware
-- Updated src/server.ts: imports config, listens on env.PORT
-- Updated jest.config.ts: setupFiles, transform with tsconfig.test.json, modulePaths, moduleDirectories
-- Created tsconfig.test.json: extends tsconfig, rootDir ".", includes tests/
-- Created tests/setup.ts: pre-sets env vars for test environment
-- Created tests with 43 passing assertions across 9 test suites
-- All 13 acceptance criteria met
-- Files changed: 24 new files + 3 modified, commit 8e8fc79
-- **Learnings:**
-  - `tsconfig.json` `rootDir: "src"` breaks jest test imports; solution: `tsconfig.test.json` with `rootDir: "."` + jest `modulePaths`
-  - jest.config.ts `setupFiles` arr runs before test framework, good for env var setup
-  - `jest.resetModules()` + process.env manipulation works for testing env-dependent modules
-  - dotenv's `config()` reads from `.env` in cwd; test must prevent it from loading for missing-var tests
-  - jsonwebtoken's `expiresIn` type uses `StringValue` from ms library; cast to `any` when using string values
-  - firebase-admin throws in test without valid credentials; handle with NODE_ENV check
----
+... (summarized)
 
 ## 2026-06-12 - US-003: Implement auth module (register, login, FCM token)
-- Created src/modules/auth/auth.schemas.ts: Zod schemas for register (name, email, password: min 8, 1 upper, 1 number), login (email, password), fcmToken
-- Created src/modules/auth/auth.repository.ts: findByEmail, createUser, updateFcmToken using Prisma
-- Created src/modules/auth/auth.usecase.ts: RegisterUseCase (duplicate check → 409, hash with bcrypt, create user, sign JWT with 7d expiry), LoginUseCase (find by email, compare password, sign JWT), UpdateFcmTokenUseCase
-- Created src/modules/auth/auth.controller.ts: register (201), login (200), updateFcmToken (200) handlers with try/catch → next(error)
-- Created src/modules/auth/auth.routes.ts: POST /auth/register, POST /auth/login, PATCH /auth/fcm-token (auth middleware + validation)
-- Updated src/app.ts: registered auth routes at /api/v1/auth
-- Created tests/unit/modules/auth/auth.usecase.spec.ts: 6 tests covering register success, duplicate email 409, login success, wrong password, non-existent email, fcm token update
-- All 10 acceptance criteria met: POST register 201, duplicate 409, invalid 400, login 200, wrong password 400, non-existent email 400, PATCH fcm-token 200, without auth 401 (via auth middleware), use case tests pass, typecheck passes
-- Files changed: 7 files (5 new module files + 1 test + app.ts update), commit 069f360
-- **Learnings:**
-  - Auth pattern: routes validate with Zod → controller delegates to use cases → use cases call repository + shared utils → repository uses Prisma
-  - Use cases throw `AppError(message, statusCode, code)` for business errors; controller catches via `next(error)`
-  - Unit tests mock the repository and utility modules at the module level using `jest.mock()`
-  - JWT payload uses `{ sub: userId, email }` format
-  - Register returns `{ id, name, email, token }` — no passwordHash in response
-  - Login returns `{ token, user: { id, name, email, createdAt } }`
----
+... (summarized)
 
 ## 2026-06-12 - US-004: Implement users and babies modules
-- Created src/modules/users/users.repository.ts: findById with select (id, name, email, createdAt)
-- Created src/modules/users/users.usecase.ts: GetUserProfileUseCase (findById + 404 if not found)
-- Created src/modules/users/users.controller.ts: getUserProfile handler
-- Created src/modules/users/users.routes.ts: GET /users/:id (auth middleware)
-- Created src/modules/babies/babies.schemas.ts: createBabySchema (name, birthDate, gender?, initialWeightKg?, initialHeightCm?, allergies?), updateBabySchema (same fields all optional), babyIdParamsSchema (uuid validation)
-- Created src/modules/babies/babies.repository.ts: create, findById, update, remove, findCaregiver (via baby_caregivers unique), findAllByUser (JOIN with role), getClient
-- Created src/modules/babies/babies.usecase.ts: CreateBabyUseCase ($transaction: create baby + insert owner in baby_caregivers), ListBabiesUseCase (findAllByUser with currentUserRole), GetBabyUseCase (findCaregiver check → 403, then findById), UpdateBabyUseCase (findCaregiver check → 403, then update), DeleteBabyUseCase (findCaregiver check → 403, owner-only check → 403, then delete)
-- Created src/modules/babies/babies.controller.ts: create (201), list (200), getById (200/403), update (200/403), remove (204/403)
-- Created src/modules/babies/babies.routes.ts: all routes at /babies protected by router.use(authMiddleware), with Zod validation on body and params
-- Updated src/app.ts: registered users and babies routes
-- Created tests/unit/modules/users/users.usecase.spec.ts: 2 tests (profile, 404)
-- Created tests/unit/modules/babies/babies.usecase.spec.ts: 9 tests (create transaction, create optional fields, list with roles, list empty, get with access, get 403, update caregiver, update 403, delete owner, delete not caregiver 403, delete caregiver not owner 403)
-- All 10 acceptance criteria met: GET /users/:id returns profile, POST /babies creates with transaction, returns 201 + currentUserRole, GET /babies lists with roles, GET /babies/:id with 403 check, PUT /babies/:id updates for any caregiver, DELETE /babies/:id owner-only, auth required (401 without token), use case tests pass (9 tests), typecheck passes
-- Files changed: 12 files (10 new module files + 2 test files + app.ts update), commit 01ccf1d
-- **Learnings:**
-  - Prisma `Decimal` fields typed as `Decimal` from @prisma/client/runtime/library — use `as any` for mock data in tests
-  - Express `req.params` values typed as `string | string[]` — cast as `{ id: string }` before passing to typed functions
-  - Prisma transactions: use `prisma.$transaction(async (tx) => {...})` directly in the use case for multi-table atomic operations
-  - Caregiver access check: `prisma.babyCaregiver.findUnique({ where: { babyId_userId: { babyId, userId } } })` via compound unique constraint
-  - All baby routes use `router.use(authMiddleware)` at module level for consistent auth enforcement
----
+... (summarized)
 
 ## 2026-06-12 - US-005: Implement caregivers management and events module
-- Added caregiver management to babies module:
-  - Schemas: addCaregiverSchema (email validation), caregiverParamsSchema (babyId + userId UUIDs)
-  - Repository: findUserByEmail, addCaregiver, removeCaregiver, listCaregivers (with user info)
-  - Use cases: AddCaregiverUseCase (find by email, duplicate check → 409, insert), RemoveCaregiverUseCase (owner-only check → 403), ListCaregiversUseCase (caregiver check → 403, list with user details)
-  - Controller: addCaregiver (200), removeCaregiver (200), listCaregivers handlers
-  - Routes: POST /babies/:id/caregivers, GET /babies/:id/caregivers, DELETE /babies/:id/caregivers/:userId
-- Created complete events module (src/modules/events/):
-  - Schemas: 7 discriminated eventType detail schemas (Zod discriminatedUnion), create/update/list schemas
-  - Repository: create, findById (with relations), findAllByBaby (type/date filters + pagination), update, remove
-  - Use cases: CreateEvent (caregiver check + details validation), ListEvents (caregiver check + paginated), GetEvent (caregiver check + babyId match → 404), UpdateEvent, DeleteEvent — all 5 with caregiver access verification
-  - Controller: create (201), list, getById, update, remove (204)
-  - Routes: mounted at /api/v1/babies/:babyId/events with Router({ mergeParams: true })
-- Updated app.ts: registered events routes
-- Added 28 new tests (10 caregiver + 18 events), all pass
-- Total: 90 tests, 13 suites, all passing
-- Build and typecheck pass
-- Files changed: 13 files (7 new, 6 modified), commit 1abca68
-- **Learnings:**
-  - Nested routes with Express: use `Router({ mergeParams: true })` so sub-resource routes can access parent params
-  - Zod discriminatedUnion enables per-eventType validation: `z.discriminatedUnion('eventType', [...schemas])`
-  - Pagination pattern: repository returns `{ data, pagination: { page, limit, total, totalPages } }`
-  - Repository filters: build Prisma `where` clause conditionally based on optional query params
-  - Controller query string parsing: manually parse `req.query` values (Date with `new Date()`, numbers with `parseInt`) and cast to expected types
-  - Find user by email: reused the Prisma user query by adding `findUserByEmail` to babiesRepository (cross-module dependency avoided via separate repository function)
-  - Event-type mismatch check: if event.babyId !== babyId, return 404 (not 403) to avoid leaking existence
----
+... (summarized)
 
 ## 2026-06-12 - US-006: Implement routines and reminders modules
-- Created routines module (src/modules/routines/):
-  - Schemas: createRoutineSchema (activityType, intervalMinutes?, defaultStartTime? HH:MM), updateRoutineSchema, toggleRoutineSchema (active boolean), routineParamsSchema
-  - Repository: create, findByBaby, findById, update, remove, toggleActive
-  - Use cases: CreateRoutineUseCase, ListRoutinesUseCase, UpdateRoutineUseCase, DeleteRoutineUseCase, ToggleRoutineUseCase — all 5 with caregiver access verification + findById + cross-baby check
-  - Controller: create (201), list, update, remove (204), toggle
-  - Routes: Router({ mergeParams: true }) at /babies/:babyId/routines with POST /, GET /, PUT /:id, DELETE /:id, PATCH /:id/toggle
-- Created reminders module (src/modules/reminders/):
-  - Schemas: createReminderSchema (reminderType, description, triggerAt, recurrence?, routineId?), updateReminderSchema, reminderParamsSchema
-  - Repository: create, findByBaby (with routine relation), findById, update, remove
-  - Use cases: CreateReminderUseCase, ListRemindersUseCase, UpdateReminderUseCase, DeleteReminderUseCase — all 4 with caregiver access verification + findById + cross-baby check
-  - Controller: create (201), list, update, remove (204)
-  - Routes: Router({ mergeParams: true }) at /babies/:babyId/reminders with POST /, GET /, PUT /:id, DELETE /:id
-- Updated app.ts: registered routinesRoutes and remindersRoutes
-- 30 new unit tests: 17 for routines (3 create + 3 list + 4 update + 3 delete + 4 toggle) + 13 for reminders (3 create + 3 list + 4 update + 3 delete)
-- Tests cover: success flows, 403 access denied, 404 not found, cross-baby protection, toggle active↔inactive
-- Total: 120 tests, 15 suites, all passing
-- Build and typecheck pass
-- Files changed: 13 files (10 new module files + 2 test files + app.ts update), commit 274aa1e
-- **Learnings:**
-  - Routines/Reminders follow the same mergeParams sub-resource pattern as events
-  - Caregiver access check via `babiesRepository.findCaregiver()` reused across all child modules
-  - Cross-baby protection: after findById, check `existing.babyId !== babyId` → throw 404
-  - Reminder repository includes `routine` relation via Prisma `include` for enriched responses
-  - Zod `z.coerce.date()` handles string-to-Date coercion for ISO datetime strings in request bodies
----
+... (summarized)
 
 ## 2026-06-12 - US-007: Implement health, measurements, and notes modules
-- Created health module (src/modules/health/):
-  - Schemas: listHealthSchema (optional type enum), healthParamsSchema
-  - Repository: findByBaby(babyId, type?) with optional recordType filter, ordered by occurredAt desc
-  - Use case: ListHealthRecordsUseCase with caregiver access check
-  - Controller: list handler returning health records
-  - Routes: GET /babies/:babyId/health with Router({ mergeParams: true })
-- Created measurements module (src/modules/measurements/):
-  - Schemas: createMeasurementSchema (measuredAt via z.coerce.date(), weightKg?, heightCm?, headCircumferenceCm?, notes?), measurementParamsSchema
-  - Repository: create, findByBaby (ordered by measuredAt desc), findById, remove
-  - Use cases: CreateMeasurementUseCase, ListMeasurementsUseCase, DeleteMeasurementUseCase — all 3 with caregiver access verification + cross-baby protection
-  - Controller: create (201), list, remove (204)
-  - Routes: POST /babies/:babyId/measurements, GET /, DELETE /:id
-- Created notes module (src/modules/notes/):
-  - Schemas: createNoteSchema (content min 1), updateNoteSchema (content min 1), noteParamsSchema
-  - Repository: create, findByBaby (ordered by createdAt desc), findById, update (Prisma.NoteUpdateInput), remove
-  - Use cases: CreateNoteUseCase, ListNotesUseCase, UpdateNoteUseCase, DeleteNoteUseCase — all 4 with caregiver access verification + cross-baby protection
-  - Controller: create (201), list, update, remove (204)
-  - Routes: POST /babies/:babyId/notes, GET /, PUT /:id, DELETE /:id
-- Updated app.ts: registered healthRoutes, measurementsRoutes, notesRoutes
-- 26 new unit tests: 4 health (list all, filter by type, empty, 403) + 10 measurements (2 create + 2 list + 2 delete + 1 403-create + 1 403-list + 1 404 + 1 cross-baby) + 12 notes (1 create + 2 list + 2 update + 2 delete + 1 403-create + 1 403-list + 1 403-update + 1 404-update + 1 404-delete)
-- All 12 acceptance criteria met: health list + type filter, measurements CRUD with measuredAt, notes full CRUD, all endpoints enforce caregiver access (403), cross-baby protection (404), tests pass, typecheck passes
-- Total: 146 tests, 18 suites, all passing
-- Files changed: 19 files (15 new module files + 3 test files + app.ts update), commit 665bcac
-- **Learnings:**
-  - Health module: read-only endpoint with optional query param ?type — uses z.enum() for validation with .optional()
-  - Measurements: Decimal columns (weightKg @db.Decimal(5,3), etc.) stored as Prisma Decimal — accepted as number in create input (Prisma auto-casts), returned as Decimal in queries
-  - Notes: No updatedAt column on Note model — content updates done inline via Prisma update
-  - When a sub-resource module handles both its own params AND uses validate middleware for query strings, the validate middleware uses `query` to validate req.query while params validation ensures babyId
----
+... (summarized)
 
 ## 2026-06-12 - US-009: Add Swagger documentation to all backend routes
-- Added Swagger JSDoc comments to all 10 route files: auth, users, babies, events, routines, reminders, health, measurements, notes, reports
-- Defined 21 schema components: UserRegister, Login, FcmToken, RegisterResponse, LoginResponse, UserProfile, CreateBaby, UpdateBaby, Baby, AddCaregiver, Caregiver, CreateEvent, UpdateEvent, RoutineEvent, CreateRoutine, UpdateRoutine, ToggleRoutine, Routine, CreateReminder, UpdateReminder, Reminder, HealthRecord, CreateMeasurement, GrowthMeasurement, CreateNote, UpdateNote, Note, SleepReportItem, FeedingReportItem, DiapersReportItem, GrowthReportItem, MedicationReportItem, ChecklistItem
-- Documented all 26 path operations with request/response schemas, parameters, query params, and error codes (400/401/403/404/409/500)
-- All endpoints grouped by tag: Auth, Users, Babies, Events, Routines, Reminders, Health, Measurements, Notes, Reports
-- All acceptance criteria met: Swagger UI serves at /api/v1/docs with 10 tagged sections, build + typecheck pass, all 169 existing tests pass
-- Files changed: 10 route files (JSDoc annotations only, no logic changes), commit d581270
-- **Learnings:**
-  - swagger-jsdoc scans files via `apis` glob pattern (`./src/modules/**/*.routes.ts`) and parses `/** @swagger ... */` JSDoc blocks
-  - Schema definitions use `components.schemas` section within any JSDoc block (aggregated across files)
-  - Path format: use Express route pattern like `/babies/{babyId}/events` matching the Express path
-  - Tags defined at top of each route file with `tags:` section, also usable inline via `tags: [TagName]` per operation
-  - All bearerAuth endpoints add `security: - bearerAuth: []` to show lock icon in Swagger UI
-  - Swagger spec can be validated by importing and checking `swaggerSpec.paths` keys
-  - Multiple endpoints on same path (POST/GET) are separate operations under the same path key
-
----
+... (summarized)
 
 ## 2026-06-12 - US-008: Implement reports and daily checklist
-- Created src/modules/reports/reports.schemas.ts: dateRangeQuerySchema (startDate/endDate YYYY-MM-DD), checklistQuerySchema (date YYYY-MM-DD), reportsParamsSchema (babyId UUID)
-- Created src/modules/reports/reports.usecase.ts: 6 use cases querying Prisma directly (no repository):
-  - SleepReportUseCase: aggregates sleep duration per day from events (eventType='sleep', details.durationMin)
-  - FeedingReportUseCase: counts feedings per day by type (bottle/breast/solids from details.feedType)
-  - DiapersReportUseCase: counts diaper changes per day by type (pee/poop/both from details.type)
-  - GrowthReportUseCase: lists GrowthMeasurement with Decimal→number conversion
-  - MedicationReportUseCase: lists medication events with details (medicationName, dose, reason)
-  - ChecklistUseCase: combines active routines with day's events, returns routine items with status (completed/pending) + orphan events
-- Created src/modules/reports/reports.controller.ts: 6 handler functions delegating to use cases
-- Created src/modules/reports/reports.routes.ts: Router({ mergeParams: true }) mounted at /babies/:babyId with GET /reports/sleep, /reports/feeding, /reports/diapers, /reports/growth, /reports/medication, /checklist — all protected by authMiddleware + validate(Zod)
-- Updated src/app.ts: registered reportsRoutes at /api/v1/babies/:babyId
-- 23 unit tests: 5 sleep (aggregation, date filter, empty, no occurredAt, 403) + 3 feeding (counts, empty, 403) + 3 diapers (counts, empty, 403) + 4 growth (list, date filter, null decimals, 403) + 3 medication (list, empty, 403) + 5 checklist (combined items, today default, all pending, missed status, 403)
-- All 11 acceptance criteria met: all 5 reports filter by startDate/endDate, checklist supports date param (defaults today), all enforce caregiver access (403), tests pass (23/23), typecheck passes, build succeeds
-- Total: 169 tests, 19 suites, all passing
-- Files changed: 6 files (5 new + app.ts update), commit 94eb590
-- **Learnings:**
-  - Reports use no repository — use cases instantiate `new PrismaClient()` and query directly for JSONB aggregation
-  - JSONB details extraction: cast `event.details as Record<string, unknown> | null`, extract fields in JS (no raw SQL needed)
-  - Reports route pattern: all reports + checklist share one Router({ mergeParams: true }) mounted at /babies/:babyId — routes define relative paths like `/reports/sleep`, `/checklist`
-  - Prisma Decimal mock: `Number(Decimal)` calls `valueOf()` — mock with `{ valueOf: () => <number> }` for test compatibility
-  - Checklist logic: match events to routines by both `routineId` and `eventType === activityType`; include orphan events (routineId = null) as separate items
-  - Date filter boundaries: start of day `T00:00:00.000Z`, end of day `T23:59:59.999Z`
----
+... (summarized)
 
 ## 2026-06-12 - US-010: Implement notification cron job
-- Created src/jobs/notification.job.ts with two exports:
-  - processPendingReminders(): queries reminders WHERE triggerAt <= now() AND sent = false AND active = true, sends FCM push notification for each pending reminder, marks sent = true on success, handles per-reminder errors gracefully
-  - startNotificationCron(): schedules processPendingReminders via node-cron to run every minute
-- Updated src/server.ts: conditionally imports and starts notification cron job when NODE_ENV !== 'test' (using dynamic import to keep the import tree clean for test runs)
-- For reminders without fcmToken: logs warning, marks as sent to prevent infinite retries
-- Error handling: per-reminder try/catch — failed notification sends log error and continue to next reminder; outer try/catch for query errors — logs and continues
-- 7 unit tests: query filter correctness, no-op on empty, push notification send + mark sent, no-token handling, graceful failure per reminder, graceful failure on query error, multiple reminders
-- All 9 acceptance criteria met: cron runs every minute, queries correct conditions, sends via Firebase, marks sent, errors don't crash, cron doesn't start in tests, starts in server.ts, build + typecheck pass
-- Total: 177 tests, 20 suites, all passing
-- Files changed: 3 files (2 new + server.ts modified), commit 09e87b7
-- **Learnings:**
-  - node-cron schedule pattern: `cron.schedule('* * * * *', callback)` — 5-field cron expression (minute, hour, day-of-month, month, day-of-week)
-  - Jest mocking for cron jobs: export the processing function separately from the schedule registration for testability; mock node-cron at module level to prevent real imports
-  - Dynamic import in server.ts: `import('./jobs/notification.job')` allows the cron job to be loaded only when needed (non-test), keeping the dependency tree clean
-  - Jest mock with esModuleInterop: TypeScript transforms `import cron from 'node-cron'` into `__importDefault(require('node-cron'))` which wraps CJS modules in `{ default: mod }` — mock should return plain CJS shape
-  - PrismaClient in jobs: can instantiate a new PrismaClient() at module level for background jobs (same pattern as repositories)
----
+... (summarized)
 
 ## 2026-06-12 - US-011: Write backend tests (unit + integration)
-- Unit tests were already implemented in previous stories (177 tests, 20 suites covering all use cases)
-- Created integration test infrastructure: tests/integration/helpers.ts with PrismaClient, cleanDatabase(), createTestUser(), createTestBaby(), generateToken() utilities
-- Created tests/integration/auth.routes.spec.ts (10 tests):
-  - Register: 201 success, 409 duplicate email, 400 invalid data (short password, missing name)
-  - Login: 200 success, 400 wrong password, 400 non-existent email
-  - FCM token: 200 with valid auth, 401 without auth, 401 invalid token
-- Created tests/integration/babies.routes.spec.ts (13 tests):
-  - Create: 201 success with currentUserRole owner, 401 without auth, 400 invalid body
-  - List: 200 success, 401 without auth
-  - Get by ID: 200 with caregiver access, 403 without access, 401 without auth
-  - Update: 200 with caregiver access, 403 without access
-  - Delete: 204 as owner, 403 as caregiver (not owner), 403 without caregiver access
-- Created tests/integration/events.routes.spec.ts (13 tests):
-  - Create: 201 feeding with details, 201 sleep with details, 201 diaper with details, 403 without access, 401 without auth
-  - List: 200 paginated, filter by type, filter by date range, 403 without access
-  - Update: 200 success, 403 without access
-  - Delete: 204 success, 403 without access
-- Updated tests/setup.ts: loads DATABASE_URL from .env for integration tests to use real database
-- Updated package.json: added --runInBand to test and test:integration scripts to prevent race conditions on shared database
-- All 9 acceptance criteria met: unit tests pass (177/177), integration tests pass (36/36), auth unit coverage complete, babies unit coverage complete, events unit coverage complete, auth integration hits real endpoints, babies integration covers CRUD with caregiver enforcement, events integration covers create and list with filters, typecheck passes
-- Total: 213 tests, 23 suites, all passing
-- Files changed: 6 files (3 new integration test files + 1 helper + setup.ts + package.json), commit 886fadc
-- **Learnings:**
-  - Integration tests require --runInBand to prevent race conditions when multiple test suites share a database
-  - Integration test helpers should provide cleanDatabase() that deletes in FK-safe order (routine_events → reminders → ... → users)
-  - Prisma's $transaction with array can have FK constraint issues with deleteMany — use sequential await calls instead
-  - Use supertest against the Express app exported from src/app.ts for integration testing
-  - Test users/babies should be created via test helper functions (createTestUser, createTestBaby) rather than through the API to simplify setup
-  - JWT tokens for integration tests can be generated directly using signToken() from shared utils
----
+... (summarized)
 
 ## 2026-06-12 - US-012: Initialize Flutter project and core infrastructure
-- Created baby-routine-app/ Flutter project with complete directory structure matching specs/03-frontend.md Section 4
-- pubspec.yaml: all 15 dependencies + 5 dev_dependencies from specs Section 13 (flutter_riverpod, go_router, dio, flutter_secure_storage, firebase_core, firebase_messaging, flutter_local_notifications, freezed_annotation, fl_chart, google_fonts, intl, + dev deps)
-- .env with API_BASE_URL (gitignored per root .gitignore)
-- lib/core/constants/api_constants.dart: exports baseUrl from flutter_dotenv
-- lib/core/constants/app_colors.dart: AppColors class with 12 color constants (lilac, lilacDark, mint, peach, lavender, white, lightGray, textGray, textDark, success, error, warning)
-- lib/core/errors/app_exception.dart: AppException with message and optional statusCode, implements Exception
-- lib/core/storage/secure_storage.dart: wrapper for flutter_secure_storage with saveToken, getToken, deleteToken
-- lib/core/utils/date_formatter.dart: 6 pt-BR date formatting methods (formatDate, formatDateTime, formatTime, formatMonthYear, formatWeekday, formatRelativeDate)
-- lib/core/utils/validators.dart: required, email (regex validation), password (min 8 chars, uppercase, number) validators with pt-BR error messages
-- lib/main.dart: entry point with WidgetsFlutterBinding, dotenv.load(), ProviderScope wrapping App
-- lib/app.dart: minimal MaterialApp placeholder
-- analysis_options.yaml: extends flutter_lints with prefer_const rules
-- test/unit/: 4 test suites (19 tests total) covering AppException (3), AppColors (12 assertions), DateFormatter (7), Validators (17)
-- Gaps: flutter pub get and flutter analyze not run — Flutter SDK 3.22+ is not installed on this machine
-- Files changed: 14 files, commit 227d1f1
-- **Learnings:**
-  - Flutter project can be created manually without `flutter create` — all that's needed is pubspec.yaml + lib/ structure
-  - `.env` is already gitignored in root .gitignore; flutter_dotenv reads from .env in project root
-  - Riverpod ProviderScope wraps the app at main.dart level
-  - Flutter test files use `package:flutter_test/flutter_test.dart` and `import 'package:baby_routine_app/...'` for tested code
-
----
+... (summarized)
 
 ## 2026-06-12 - US-013: Set up networking, theme, navigation, shared widgets, and providers
-- Created lib/core/network/auth_interceptor.dart: AuthInterceptor extends Interceptor, reads JWT from SecureStorage on each request, adds Bearer Authorization header, clears token on 401 responses
-- Created lib/core/network/dio_client.dart: DioClient with Dio instance (baseUrl, 10s timeouts, JSON headers), AuthInterceptor in interceptors list, get/post/put/patch/delete methods
-- Rewrote lib/app.dart: MaterialApp.router with GoRouter (17 routes), Material3 theme (ColorScheme.fromSeed(seedColor: lilac), useMaterial3: true, Nunito font, rounded 12px inputs/buttons, full-width elevated buttons with lilacDark)
-- GoRouter redirect: checks SecureStorage.getToken() async, redirects unauthenticated users from protected routes to /login, redirects authenticated users from public routes (/splash, /login, /register) to /babies
-- All 17 routes registered: /splash, /login, /register, /babies, /home, /feeding, /sleep, /diaper, /bath, /appointment, /vaccination, /medication, /routines, /health, /reports, /notes, /caregivers
-- Created 6 shared widgets:
-  - AppButton: full-width, rounded (12px), lilacDark, optional isLoading spinner, customizable colors
-  - AppTextField: label, hintText, validator, obscureText, suffixIcon, rounded filled input with lightGray
-  - AppLoading: centered CircularProgressIndicator with optional message
-  - AppSnackbar: static showError (error color) / showSuccess (success color) via ScaffoldMessenger
-  - EventCard: Card with icon, title, subtitle, time, status badge (completed/missed/pending with color coding), onTap
-  - HealthRecordItem: list item with icon, title, subtitle, date — for health history screens
-- Created 3 global Riverpod providers:
-  - secureStorageProvider: Provider<SecureStorage>
-  - dioClientProvider: Provider<DioClient> (watches secureStorageProvider)
-  - selectedBabyProvider: StateProvider<dynamic?> (placeholder for Baby model in US-015)
-- Created 17 placeholder screen stubs (each feature's presentation/ directory) — minimal Scaffold with placeholder text, ready for US-014 through US-019 to fill out
-- Wrote 9 test files (3 unit + 6 widget) with 26 assertions:
-  - Unit: dio_client_test (1), storage_provider_test (1), selected_baby_provider_test (2 — null default + set/read)
-  - Widget: app_button_test (5 — label, loading, enabled/disabled, default color), app_text_field_test (4 — label, hint, obscure on/off), app_loading_test (3 — spinner, message shown/hidden), app_snackbar_test (2 — error + success messages with correct colors), event_card_test (5 — title/icon, subtitle, time/status, completed color, missed color), health_record_item_test (2 — full render, default color)
-- Gaps: flutter pub get, flutter analyze, and flutter test not run — Flutter SDK 3.22+ is not installed on this machine
-- Files changed: 38 files (36 new + 1 modified app.dart + 1 modified main.dart not staged but ok), commit 0fe8365
+... (summarized)
+
+## 2026-06-12 - US-014: Implement auth feature screens (splash, login, register)
+... (summarized)
+
+## 2026-06-12 - US-015: Implement babies feature screens
+- Created lib/features/babies/models/baby.dart: Baby and Caregiver models with @JsonSerializable()
+- Created lib/features/babies/models/baby.g.dart: Manual JSON serialization (fromJson/toJson for both models)
+- Created lib/features/babies/repositories/baby_repository.dart: abstract interface with create, list, getById, update, delete, addCaregiver, removeCaregiver, listCaregivers
+- Created lib/features/babies/repositories/baby_repository_impl.dart: DioClient implementation of all 8 repository methods, calling correct API endpoints
+- Created lib/features/babies/controllers/baby_controller.dart: AsyncNotifier<void> with listBabies (returns list), createBaby (saves to selectedBabyProvider), updateBaby, deleteBaby (clears selectedBaby), addCaregiver, removeCaregiver, listCaregivers
+- Rewrote lib/features/babies/presentation/select_baby_screen.dart: lists babies from API with name, gender icon, role badge; tap to select → set selectedBabyProvider → navigate /home; FAB → /babies/create; refresh indicator; empty state; error state with retry
+- Created lib/features/babies/presentation/create_baby_screen.dart: form with name, birthDate (DatePicker), gender (dropdown), weight/height (numeric), allergies; submit calls babyController.createBaby; navigates /home on success; pt-BR labels
+- Created lib/features/babies/presentation/edit_baby_screen.dart: pre-filled form from selectedBabyProvider; save calls updateBaby; delete button only for owner (currentUserRole === 'owner'); delete confirmation dialog; on delete navigate /babies; pt-BR labels
+- Rewrote lib/features/babies/presentation/caregivers_screen.dart: lists caregivers with role badges; owner sees FAB to add caregiver; add dialog with email validation; remove button for non-owner caregivers; remove confirmation; pt-BR labels
+- Updated lib/shared/providers/selected_baby_provider.dart: changed from `typedef Baby = dynamic` to importing actual Baby model
+- Updated lib/app.dart: added GoRoute entries for /babies/create (CreateBabyScreen) and /babies/edit (EditBabyScreen)
+- Wrote 5 test files (27 new tests):
+  - test/unit/models/baby_test.dart: 10 tests (Baby fromJson 2, optional fields, toJson, omit nulls, copyWith, equality, date-only serialization; Caregiver fromJson, toJson, equality)
+  - test/widget/select_baby_screen_test.dart: 6 tests (empty state, list babies with roles, FAB, gender icons, app bar pt-BR, error state)
+  - test/widget/create_baby_screen_test.dart: 5 tests (form fields render, app bar pt-BR, date picker icon, name validation, dropdown pt-BR options)
+  - test/widget/edit_baby_screen_test.dart: 5 tests (pre-filled form, owner sees delete button, caregiver hides delete, app bar pt-BR, delete confirmation dialog)
+  - test/widget/caregivers_screen_test.dart: 7 tests (list caregivers, empty state, app bar pt-BR, owner sees FAB, caregiver no FAB, remove button, add dialog)
+- Updated test/unit/selected_baby_provider_test.dart: changed from Map to actual Baby model
 - **Learnings:**
-  - GoRouter redirect is an async function running outside the provider tree — must use SecureStorage directly, not via Riverpod
-  - Swapped ScaffoldMessenger.showSnackBar for hideCurrentSnackBar().showSnackBar() to prevent stacking snackbars
-  - Placeholder screens are needed for GoRouter to compile — each route's builder must return a concrete Widget
-  - EventCard and HealthRecordItem re-use iconColor on a Container with opacity 0.1 for a subtle background tint
-  - Widget tests need MaterialApp+Scaffold wrapper to provide MediaQuery and theme context
-  - The Baby type in selected_baby_provider is a placeholder — it will be replaced by the freezed Baby model in US-015
+  - Baby controller uses AsyncNotifier<void> for mutations (AsyncValue.guard) but list operations return Future<List<T>> directly
+  - Screen data loading calls repository directly in ConsumerState methods with local _isLoading/_error state
+  - selectedBabyProvider typed as `StateProvider<Baby?>` — set on baby select/create, cleared on delete
+  - Roles displayed in pt-BR: "Responsável" for owner, "Cuidador(a)" for caregiver with color-coded badges
+  - Delete button and add caregiver FAB are owner-only (check `baby.currentUserRole == 'owner'`)
+  - DatePicker uses `Intl.defaultLocale = 'pt_BR'` via `showDatePicker(locale: Locale('pt', 'BR'))`
+  - Caregiver birthDate JSON format: date-only string (YYYY-MM-DD), no time component
+  - GoRouter: separate GoRoute entries for /babies/create and /babies/edit
+  - Form screens use ConsumerStatefulWidget with GlobalKey<FormState>
+  - Widget tests need ProviderScope with mocked BabyRepository via overrideWithValue
+- Files changed: 17 files (12 new, 5 modified)
+---

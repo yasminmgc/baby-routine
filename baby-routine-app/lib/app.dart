@@ -8,6 +8,8 @@ import 'features/auth/presentation/login_screen.dart';
 import 'features/auth/presentation/register_screen.dart';
 import 'features/auth/presentation/splash_screen.dart';
 import 'features/babies/presentation/caregivers_screen.dart';
+import 'features/babies/presentation/create_baby_screen.dart';
+import 'features/babies/presentation/edit_baby_screen.dart';
 import 'features/babies/presentation/select_baby_screen.dart';
 import 'features/events/presentation/appointment_screen.dart';
 import 'features/events/presentation/bath_screen.dart';
@@ -60,6 +62,14 @@ final router = GoRouter(
     GoRoute(
       path: '/babies',
       builder: (_, __) => const SelectBabyScreen(),
+    ),
+    GoRoute(
+      path: '/babies/create',
+      builder: (_, __) => const CreateBabyScreen(),
+    ),
+    GoRoute(
+      path: '/babies/edit',
+      builder: (_, __) => const EditBabyScreen(),
     ),
     GoRoute(
       path: '/home',
