@@ -11,6 +11,7 @@ import remindersRoutes from './modules/reminders/reminders.routes';
 import healthRoutes from './modules/health/health.routes';
 import measurementsRoutes from './modules/measurements/measurements.routes';
 import notesRoutes from './modules/notes/notes.routes';
+import reportsRoutes from './modules/reports/reports.routes';
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.use('/api/v1/babies/:babyId/reminders', remindersRoutes);
 app.use('/api/v1/babies/:babyId/health', healthRoutes);
 app.use('/api/v1/babies/:babyId/measurements', measurementsRoutes);
 app.use('/api/v1/babies/:babyId/notes', notesRoutes);
+app.use('/api/v1/babies/:babyId', reportsRoutes);
 
 // Global error handler (must be after routes)
 app.use(errorMiddleware);
