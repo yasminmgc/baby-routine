@@ -10,12 +10,10 @@ Started: 2026-06-12
 - Prisma 5.x, PostgreSQL peer auth, migrations in prisma/migrations/
 - Tests with jest: `npm test` (unit in tests/unit/**, integration in tests/integration/**)
 - Build: `npm run build` (tsc), typecheck: `npx tsc --noEmit`
-- `tsconfig.test.json` (rootDir ".") for jest module resolution from test files
 - Auth/validation: Zod schemas → controller → use cases (throw AppError) → repository (Prisma)
 - Sub-resource pattern: `Router({ mergeParams: true })` mounted at `/api/v1/babies/:babyId/...`
 - Caregiver access: findCaregiver check on every baby-related endpoint → 403 if not
 - Pagination: `{ data, pagination: { page, limit, total, totalPages } }`
-- Integration tests: --runInBand, cleanDatabase() in FK-safe order, supertest against app
 
 ### Frontend (baby-routine-app/)
 - Flutter 3.22+ / Dart 3.4+ project in `baby-routine-app/`
@@ -29,14 +27,13 @@ Started: 2026-06-12
 - Localization: intl package for pt-BR date formatting
 - `.env` is gitignored; uses flutter_dotenv for environment config
 - Auth controller pattern: `AsyncNotifier<void>` with `state = await AsyncValue.guard(() async { ... })` — guard catches sync/async errors into AsyncValue.error
-- Controller provider: `final fooControllerProvider = AsyncNotifierProvider<FooController, void>(FooController.new)`
+- AsyncNotifierProvider for controllers that need to manage AsyncValue state; controllers that return lists directly use AsyncNotifier<void> with manual Future<T> return
 - Repository provider: `final fooRepoProvider = Provider<FooRepository>((ref) => FooRepositoryImpl(ref.watch(dioClientProvider)))`
 - Models: `@JsonSerializable()` from `json_annotation` with manually written `.g.dart` file containing `_$ClassNameFromJson` / `_$ClassNameToJson`
 - Screens: `ConsumerStatefulWidget` + `GlobalKey<FormState>` for form validation
 - Error extraction from Dio: dynamic property access with try/catch for `error.response?.data?.message`
 - Widget tests for ConsumerStatefulWidget need `ProviderScope` wrapper; mock providers via `.overrideWithValue()`
 - `Color.withOpacity()` used instead of `Color.withValues()` for Flutter 3.22 compatibility
-- Flutter commands: `flutter pub get`, `flutter analyze`, `flutter test`, `flutter pub run build_runner build --delete-conflicting-outputs`
 - GoRouter global router variable: defined at module level (not in a Widget), accesses SecureStorage directly for redirect logic
 - Redirect pattern: async (context, state) — check SecureStorage.getToken(), redirect unauthenticated from protected routes to /login, authenticated from public routes to /babies
 - DioClient wraps Dio with BaseOptions (baseUrl, timeouts 10s, JSON headers), adds AuthInterceptor, exposes get/post/put/patch/delete
@@ -45,11 +42,9 @@ Started: 2026-06-12
 - Theme: ColorScheme.fromSeed(seedColor: AppColors.lilac), useMaterial3: true, GoogleFonts.nunitoTextTheme(), rounded InputDecoration (12px), full-width ElevatedButton (min 52px, lilacDark)
 - Baby controller pattern: AsyncNotifier<void> for mutations (create/update/delete/addCaregiver/removeCaregiver) with AsyncValue.guard; list operations return Future<List<T>> directly to caller
 - Screen data loading: call repository directly in ConsumerStatefulWidget methods (not via controller state), manage local _isLoading/_error state
-- Form screens: ConsumerStatefulWidget + GlobalKey<FormState> + TextEditingController per field + DatePicker via showDatePicker with pt-BR locale
-- Caregiver access in UI: check `baby.currentUserRole == 'owner'` to show/hide owner-only actions (delete button, add caregiver FAB)
-- Roles in pt-BR: owner → "Responsável", caregiver → "Cuidador(a)"
-- GoRouter routes: separate GoRoute for /babies, /babies/create, /babies/edit; each with its own screen builder
-- Dialog for add caregiver: showDialog with AlertDialog containing Form + TextFormField email validation; cancel/confirm buttons
+- Home screen pattern: trigger initial AsyncNotifierProvider via `ref.read(provider)` in post-frame callback
+- Checklist pattern: riverpod AsyncNotifier with build() that reads selectedBabyProvider; widget watches provider with .when(data:, loading:, error:)
+- Pull-to-refresh: RefreshIndicator wrapping ListView, onRefresh calls controller.notifier.refresh()
 
 ---
 
@@ -62,79 +57,53 @@ Started: 2026-06-12
 ### US-005: Implement caregivers management and events module
 ### US-006: Implement routines and reminders modules
 ### US-007: Implement health, measurements, and notes modules
-### US-008 through US-020: remaining stories
+### US-008: Implement reports and daily checklist
+### US-009: Add Swagger documentation to all backend routes
+### US-010: Implement notification cron job
+### US-011: Write backend tests (unit + integration)
+### US-012: Initialize Flutter project and core infrastructure
+### US-013: Set up networking, theme, navigation, shared widgets, and providers
+### US-014: Implement auth feature screens (splash, login, register)
+### US-015: Implement babies feature screens
+### US-016: Implement home screen and checklist widget (see below)
+### US-017 through US-020: remaining stories
 
-## 2026-06-12 - US-001: Initialize backend project and database schema
-... (summarized — see previous entries)
+## 2015-06-12 - US-001 through US-015 (summarized)
+(Completed in earlier sessions — see previous progress entries)
 
-## 2026-06-12 - US-002: Set up core configuration and shared infrastructure
-... (summarized)
-
-## 2026-06-12 - US-003: Implement auth module (register, login, FCM token)
-... (summarized)
-
-## 2026-06-12 - US-004: Implement users and babies modules
-... (summarized)
-
-## 2026-06-12 - US-005: Implement caregivers management and events module
-... (summarized)
-
-## 2026-06-12 - US-006: Implement routines and reminders modules
-... (summarized)
-
-## 2026-06-12 - US-007: Implement health, measurements, and notes modules
-... (summarized)
-
-## 2026-06-12 - US-009: Add Swagger documentation to all backend routes
-... (summarized)
-
-## 2026-06-12 - US-008: Implement reports and daily checklist
-... (summarized)
-
-## 2026-06-12 - US-010: Implement notification cron job
-... (summarized)
-
-## 2026-06-12 - US-011: Write backend tests (unit + integration)
-... (summarized)
-
-## 2026-06-12 - US-012: Initialize Flutter project and core infrastructure
-... (summarized)
-
-## 2026-06-12 - US-013: Set up networking, theme, navigation, shared widgets, and providers
-... (summarized)
-
-## 2026-06-12 - US-014: Implement auth feature screens (splash, login, register)
-... (summarized)
-
-## 2026-06-12 - US-015: Implement babies feature screens
-- Created lib/features/babies/models/baby.dart: Baby and Caregiver models with @JsonSerializable()
-- Created lib/features/babies/models/baby.g.dart: Manual JSON serialization (fromJson/toJson for both models)
-- Created lib/features/babies/repositories/baby_repository.dart: abstract interface with create, list, getById, update, delete, addCaregiver, removeCaregiver, listCaregivers
-- Created lib/features/babies/repositories/baby_repository_impl.dart: DioClient implementation of all 8 repository methods, calling correct API endpoints
-- Created lib/features/babies/controllers/baby_controller.dart: AsyncNotifier<void> with listBabies (returns list), createBaby (saves to selectedBabyProvider), updateBaby, deleteBaby (clears selectedBaby), addCaregiver, removeCaregiver, listCaregivers
-- Rewrote lib/features/babies/presentation/select_baby_screen.dart: lists babies from API with name, gender icon, role badge; tap to select → set selectedBabyProvider → navigate /home; FAB → /babies/create; refresh indicator; empty state; error state with retry
-- Created lib/features/babies/presentation/create_baby_screen.dart: form with name, birthDate (DatePicker), gender (dropdown), weight/height (numeric), allergies; submit calls babyController.createBaby; navigates /home on success; pt-BR labels
-- Created lib/features/babies/presentation/edit_baby_screen.dart: pre-filled form from selectedBabyProvider; save calls updateBaby; delete button only for owner (currentUserRole === 'owner'); delete confirmation dialog; on delete navigate /babies; pt-BR labels
-- Rewrote lib/features/babies/presentation/caregivers_screen.dart: lists caregivers with role badges; owner sees FAB to add caregiver; add dialog with email validation; remove button for non-owner caregivers; remove confirmation; pt-BR labels
-- Updated lib/shared/providers/selected_baby_provider.dart: changed from `typedef Baby = dynamic` to importing actual Baby model
-- Updated lib/app.dart: added GoRoute entries for /babies/create (CreateBabyScreen) and /babies/edit (EditBabyScreen)
-- Wrote 5 test files (27 new tests):
-  - test/unit/models/baby_test.dart: 10 tests (Baby fromJson 2, optional fields, toJson, omit nulls, copyWith, equality, date-only serialization; Caregiver fromJson, toJson, equality)
-  - test/widget/select_baby_screen_test.dart: 6 tests (empty state, list babies with roles, FAB, gender icons, app bar pt-BR, error state)
-  - test/widget/create_baby_screen_test.dart: 5 tests (form fields render, app bar pt-BR, date picker icon, name validation, dropdown pt-BR options)
-  - test/widget/edit_baby_screen_test.dart: 5 tests (pre-filled form, owner sees delete button, caregiver hides delete, app bar pt-BR, delete confirmation dialog)
-  - test/widget/caregivers_screen_test.dart: 7 tests (list caregivers, empty state, app bar pt-BR, owner sees FAB, caregiver no FAB, remove button, add dialog)
-- Updated test/unit/selected_baby_provider_test.dart: changed from Map to actual Baby model
+## 2026-06-12 - US-016: Implement home screen and checklist widget
+- Created lib/features/home/models/checklist_item.dart: ChecklistItem and ChecklistResponse models with @JsonSerializable()
+- Created lib/features/home/models/checklist_item.g.dart: Manual JSON serialization (fromJson/toJson)
+- Created lib/features/home/repositories/checklist_repository.dart: Abstract interface with fetch(babyId, {date})
+- Created lib/features/home/repositories/checklist_repository_impl.dart: DioClient impl calling GET /babies/:babyId/checklist
+- Created lib/features/home/controllers/checklist_controller.dart: AsyncNotifierProvider<ChecklistController, ChecklistResponse> with build() reading selectedBabyProvider, refresh() method
+- Rewrote lib/features/home/presentation/home_screen.dart: Full implementation with:
+  - AppBar showing "Olá, {babyName}" in lilacDark
+  - 7 quick-action buttons (Mamadeira→/feeding, Sono→/sleep, Fralda→/diaper, Banho→/bath, Vacina→/vaccination, Consulta→/appointment, Medicação→/medication) in horizontal scroll
+  - Navigation bar row: Rotinas, Histórico, Relatórios, Anotações, Cuidadores
+  - Bottom navigation: Início (selected), Rotinas, Relatórios, Cuidadores
+  - Embedded ChecklistWidget
+- Created lib/features/home/presentation/checklist_widget.dart: 
+  - Date header with weekday + date in pt-BR
+  - Checklist items sorted by scheduledTime, each showing activity icon, label, time, and status (completed=green check, pending=gray clock, missed=red X)
+  - Pull-to-refresh via RefreshIndicator
+  - Empty state ("Nenhuma atividade programada para hoje")
+  - Error state with retry button
+  - All activity types mapped to Material icons and pt-BR labels
+- Wrote 3 test files (35 new tests):
+  - test/unit/models/checklist_item_test.dart: 17 tests (ChecklistItem fromJson with all fields, event type, missed status, toJson, omit nulls, copyWith, equality, hashCode, toString, all activity types; ChecklistResponse fromJson with items, empty list, toJson, equality, hashCode, toString)
+  - test/widget/checklist_widget_test.dart: 9 tests (date header, empty state, items with status, activity icons, error state with retry, sorting by time, event type items, all status types)
+  - test/widget/home_screen_test.dart: 9 tests (baby name in AppBar, all 7 quick actions, quick action icons, navigation labels, navigation icons, bottom nav, theme colors, checklist integration)
 - **Learnings:**
-  - Baby controller uses AsyncNotifier<void> for mutations (AsyncValue.guard) but list operations return Future<List<T>> directly
-  - Screen data loading calls repository directly in ConsumerState methods with local _isLoading/_error state
-  - selectedBabyProvider typed as `StateProvider<Baby?>` — set on baby select/create, cleared on delete
-  - Roles displayed in pt-BR: "Responsável" for owner, "Cuidador(a)" for caregiver with color-coded badges
-  - Delete button and add caregiver FAB are owner-only (check `baby.currentUserRole == 'owner'`)
-  - DatePicker uses `Intl.defaultLocale = 'pt_BR'` via `showDatePicker(locale: Locale('pt', 'BR'))`
-  - Caregiver birthDate JSON format: date-only string (YYYY-MM-DD), no time component
-  - GoRouter: separate GoRoute entries for /babies/create and /babies/edit
-  - Form screens use ConsumerStatefulWidget with GlobalKey<FormState>
-  - Widget tests need ProviderScope with mocked BabyRepository via overrideWithValue
-- Files changed: 17 files (12 new, 5 modified)
+  - Checklist API returns `{ date, items: [{ type, activityType, scheduledTime, status, ... }] }` — routine items have scheduledTime, event items don't
+  - Backend checklist groups routines (with status derived from matching events) + orphan events
+  - AsyncNotifierProvider auto-builds on first watch; trigger it via `ref.read()` in post-frame callback for screens
+  - Repository providers defined alongside controller providers in controller file; overridden in tests via `.overrideWithValue()`
+  - Widget tests for ConsumerStatefulWidget with AsyncNotifier needs ProviderScope and mock repository override
+  - Bottom navigation uses selected/unselected state with color differentiation
+  - Quick actions rendered as horizontal scrollable row with icon+label columns
+  - pt-BR status labels: completed→"Concluído", pending→"Pendente", missed→"Não realizado"
+  - pt-BR activity labels: feeding→"Alimentação", sleep→"Sono", diaper→"Fralda", bath→"Banho", vaccination→"Vacina", appointment→"Consulta", medication→"Medicação"
+  - Navigation from home uses `context.push()` (not go) to preserve back stack
+- Files changed: 10 files (9 new, 1 modified)
 ---
