@@ -1,0 +1,72 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.secret
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Coverage
+coverage/
+.nyc_output/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Prisma
+prisma/migrations/*/migration_lock.toml
+
+# Flutter
+.dart_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+*.iml
+*.ipr
+*.iws
+
+# Android
+android/app/debug.keystore
+android/.gradle/
+android/local.properties
+android/key.properties
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/.last_build_id
+ios/Flutter/App.framework/
+ios/Flutter/Flutter.framework/
+ios/Flutter/Generated.xcconfig
+
+# Firebase
+google-services.json
+GoogleService-Info.plist
+firebase-debug.log
+.firebase/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
