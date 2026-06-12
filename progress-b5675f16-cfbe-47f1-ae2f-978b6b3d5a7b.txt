@@ -45,6 +45,11 @@ Started: 2026-06-12
 - Home screen pattern: trigger initial AsyncNotifierProvider via `ref.read(provider)` in post-frame callback
 - Checklist pattern: riverpod AsyncNotifier with build() that reads selectedBabyProvider; widget watches provider with .when(data:, loading:, error:)
 - Pull-to-refresh: RefreshIndicator wrapping ListView, onRefresh calls controller.notifier.refresh()
+- Event controller pattern: AsyncNotifier<void> for mutations (create/update/delete) with AsyncValue.guard; list/getById return Future directly to caller; reads selectedBabyProvider for babyId
+- Event screens: ConsumerStatefulWidget + GlobalKey<FormState>, error extraction from DioException, success snackbar on completion, navigate to /home via context.go()
+- Event screen pattern: try/catch around controller call, then check `ref.read(eventControllerProvider)` state for error/success (same as baby controller pattern)
+- Time picker pattern: showTimePicker with 24-hour format, pt-BR locale override via Localizations.override, display formatted time via _timeLabel helper
+- ChoiceChip pattern: Wrap widget with spacing 8, selected with lilacDark background and white text, unselected with white background and dark text
 
 ---
 
@@ -65,8 +70,9 @@ Started: 2026-06-12
 ### US-013: Set up networking, theme, navigation, shared widgets, and providers
 ### US-014: Implement auth feature screens (splash, login, register)
 ### US-015: Implement babies feature screens
-### US-016: Implement home screen and checklist widget (see below)
-### US-017 through US-020: remaining stories
+### US-016: Implement home screen and checklist widget
+### US-017: Implement events feature screens (feeding, sleep, diaper)
+### US-018 through US-020: remaining stories
 
 ## 2015-06-12 - US-001 through US-015 (summarized)
 (Completed in earlier sessions — see previous progress entries)
@@ -77,33 +83,47 @@ Started: 2026-06-12
 - Created lib/features/home/repositories/checklist_repository.dart: Abstract interface with fetch(babyId, {date})
 - Created lib/features/home/repositories/checklist_repository_impl.dart: DioClient impl calling GET /babies/:babyId/checklist
 - Created lib/features/home/controllers/checklist_controller.dart: AsyncNotifierProvider<ChecklistController, ChecklistResponse> with build() reading selectedBabyProvider, refresh() method
-- Rewrote lib/features/home/presentation/home_screen.dart: Full implementation with:
-  - AppBar showing "Olá, {babyName}" in lilacDark
-  - 7 quick-action buttons (Mamadeira→/feeding, Sono→/sleep, Fralda→/diaper, Banho→/bath, Vacina→/vaccination, Consulta→/appointment, Medicação→/medication) in horizontal scroll
-  - Navigation bar row: Rotinas, Histórico, Relatórios, Anotações, Cuidadores
-  - Bottom navigation: Início (selected), Rotinas, Relatórios, Cuidadores
-  - Embedded ChecklistWidget
-- Created lib/features/home/presentation/checklist_widget.dart: 
-  - Date header with weekday + date in pt-BR
-  - Checklist items sorted by scheduledTime, each showing activity icon, label, time, and status (completed=green check, pending=gray clock, missed=red X)
-  - Pull-to-refresh via RefreshIndicator
-  - Empty state ("Nenhuma atividade programada para hoje")
-  - Error state with retry button
-  - All activity types mapped to Material icons and pt-BR labels
-- Wrote 3 test files (35 new tests):
-  - test/unit/models/checklist_item_test.dart: 17 tests (ChecklistItem fromJson with all fields, event type, missed status, toJson, omit nulls, copyWith, equality, hashCode, toString, all activity types; ChecklistResponse fromJson with items, empty list, toJson, equality, hashCode, toString)
-  - test/widget/checklist_widget_test.dart: 9 tests (date header, empty state, items with status, activity icons, error state with retry, sorting by time, event type items, all status types)
-  - test/widget/home_screen_test.dart: 9 tests (baby name in AppBar, all 7 quick actions, quick action icons, navigation labels, navigation icons, bottom nav, theme colors, checklist integration)
-- **Learnings:**
-  - Checklist API returns `{ date, items: [{ type, activityType, scheduledTime, status, ... }] }` — routine items have scheduledTime, event items don't
-  - Backend checklist groups routines (with status derived from matching events) + orphan events
-  - AsyncNotifierProvider auto-builds on first watch; trigger it via `ref.read()` in post-frame callback for screens
-  - Repository providers defined alongside controller providers in controller file; overridden in tests via `.overrideWithValue()`
-  - Widget tests for ConsumerStatefulWidget with AsyncNotifier needs ProviderScope and mock repository override
-  - Bottom navigation uses selected/unselected state with color differentiation
-  - Quick actions rendered as horizontal scrollable row with icon+label columns
-  - pt-BR status labels: completed→"Concluído", pending→"Pendente", missed→"Não realizado"
-  - pt-BR activity labels: feeding→"Alimentação", sleep→"Sono", diaper→"Fralda", bath→"Banho", vaccination→"Vacina", appointment→"Consulta", medication→"Medicação"
-  - Navigation from home uses `context.push()` (not go) to preserve back stack
+- Rewrote lib/features/home/presentation/home_screen.dart: Full implementation
+- Created lib/features/home/presentation/checklist_widget.dart: Full implementation
+- Wrote 3 test files (35 new tests)
 - Files changed: 10 files (9 new, 1 modified)
+---
+## 2026-06-12 - US-017: Implement events feature screens (feeding, sleep, diaper)
+- Created lib/features/events/models/routine_event.dart: RoutineEvent model with @JsonSerializable() (id, eventType, scheduledAt, occurredAt, status, details Map, notes)
+- Created lib/features/events/models/routine_event.g.dart: Manual JSON serialization (fromJson/toJson)
+- Created lib/features/events/repositories/event_repository.dart: Abstract interface (create, list, getById, update, delete)
+- Created lib/features/events/repositories/event_repository_impl.dart: DioClient impl calling /babies/:babyId/events endpoints
+- Created lib/features/events/controllers/event_controller.dart: AsyncNotifierProvider<EventController, void> with createEvent, listEvents, updateEvent, deleteEvent. Uses selectedBabyProvider for babyId.
+- Implemented lib/features/events/presentation/feeding_screen.dart:
+  - Dropdown: Tipo de alimentação (Mamadeira/Peito/Sólidos)
+  - Quantity (ml) and duration (min) number fields
+  - Observations field
+  - Loading spinner, success/error snackbar, pt-BR labels
+  - Navigate to /home on success
+- Implemented lib/features/events/presentation/sleep_screen.dart:
+  - Start/end time pickers with 24h format, pt-BR locale
+  - Auto-calculated duration display (minutes/hours)
+  - Location dropdown (Berço/Cama/Colo)
+  - Manual validation: requires both times selected
+  - Submit with details: startTime, endTime, durationMin, location
+- Implemented lib/features/events/presentation/diaper_screen.dart:
+  - Type: ChoiceChips (Xixi/Cocô/Ambos) with icons
+  - Color: conditional picker (yellow for pee; yellow/green/brown for poop/both)
+  - Consistency dropdown (Normal/Pastosa/Líquida)
+  - Rash toggle with dynamic label
+  - Auto-sets color=yellow for pee type
+- Wrote 4 test files (46 new tests):
+  - test/unit/models/routine_event_test.dart: 13 tests (fromJson all fields, null optionals, toJson, omit nulls, copyWith, equality, different details, hashCode, toString, sleep event details, diaper event details, all event types, all statuses)
+  - test/widget/feeding_screen_test.dart: 10 tests (title, dropdown, fields, notes, buttons, loading, error, cancel enabled, dropdown options, theme)
+  - test/widget/sleep_screen_test.dart: 10 tests (title, time pickers, location, notes, buttons, error on empty times, error snackbar, theme, dropdown options, default labels)
+  - test/widget/diaper_screen_test.dart: 13 tests (title, type labels, 3 chips, consistency, rash toggle, toggle changes, notes, buttons, error snackbar, theme, loading, consistency options, poop type shows color options)
+- **Learnings:**
+  - Event API endpoints: POST/GET /babies/:babyId/events, GET/PUT/DELETE /babies/:babyId/events/:id
+  - Event details JSONB stored as Map<String, dynamic> in Flutter; serialized as JSON object to API
+  - DateTime fields serialize to ISO 8601; DateTime? fields omitted when null
+  - Time picker requires MediaQuery with alwaysUse24HourFormat and Localizations.override for pt-BR
+  - ChoiceChip selected/unselected states use lilacDark palette
+  - All 3 screens follow same pattern: try/catch → ref.read(controller) → check state.hasError for snackbar
+  - Navigation on success uses context.go('/home') to replace stack
+- Files changed: 13 files (9 new, 3 modified, 1 updated progress)
 ---
