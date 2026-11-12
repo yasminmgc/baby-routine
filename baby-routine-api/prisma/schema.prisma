@@ -1,0 +1,255 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────
+
+model User {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String   @db.VarChar(100)
+  email        String   @unique @db.VarChar(150)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+  fcmToken     String?  @map("fcm_token") @db.VarChar(255)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Bebês onde este usuário é cuidador (inclui os que ele criou)
+  caregiverOf    BabyCaregiver[]
+  routineEvents  RoutineEvent[]
+  routines       Routine[]
+  reminders      Reminder[]
+  notes          Note[]
+  healthRecords  HealthRecord[]
+  measurements   GrowthMeasurement[]
+
+  @@map("users")
+}
+
+// ─────────────────────────────────────────
+// BABIES
+// ─────────────────────────────────────────
+
+model Baby {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String   @db.VarChar(100)
+  birthDate       DateTime @map("birth_date") @db.Date
+  gender          String?  @db.VarChar(10)   // male | female | other
+  initialWeightKg Decimal? @map("initial_weight_kg") @db.Decimal(5, 3)
+  initialHeightCm Decimal? @map("initial_height_cm") @db.Decimal(5, 2)
+  allergies       String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Todos os cuidadores deste bebê (N:N com users)
+  caregivers         BabyCaregiver[]
+  routineEvents      RoutineEvent[]
+  routines           Routine[]
+  reminders          Reminder[]
+  healthRecords      HealthRecord[]
+  growthMeasurements GrowthMeasurement[]
+  notes              Note[]
+
+  @@map("babies")
+}
+
+// ─────────────────────────────────────────
+// BABY CAREGIVERS (N:N users ↔ babies)
+// ─────────────────────────────────────────
+//
+// Esta é a tabela central de controle de acesso.
+// Todo usuário que precisa acessar um bebê DEVE estar aqui.
+//
+// Ao criar um bebê, o criador é automaticamente inserido
+// nesta tabela com role = "owner" (regra do Use Case).
+//
+// role values:
+//   owner     — criou o bebê; pode excluí-lo e gerenciar cuidadores
+//   caregiver — convidado; pode registrar e visualizar eventos
+
+model BabyCaregiver {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  babyId    String   @map("baby_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      String   @default("caregiver") @db.VarChar(20)
+  // role values: owner | caregiver
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  baby Baby @relation(fields: [babyId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([babyId, userId])
+  @@index([userId])   // busca rápida: "quais bebês este usuário cuida?"
+  @@map("baby_caregivers")
+}
+
+// ─────────────────────────────────────────
+// ROUTINE EVENTS
+// ─────────────────────────────────────────
+//
+// Registra cada evento de rotina do bebê.
+// baby_id → a quem pertence o evento
+// user_id → quem registrou o evento (mãe, pai, babá, etc.)
+//
+// eventType values:
+// feeding | sleep | diaper | bath | appointment | vaccination | medication
+
+model RoutineEvent {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  babyId      String    @map("baby_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  routineId   String?   @map("routine_id") @db.Uuid
+  eventType   String    @map("event_type") @db.VarChar(30)
+  scheduledAt DateTime? @map("scheduled_at") @db.Timestamptz
+  occurredAt  DateTime? @map("occurred_at") @db.Timestamptz
+  status      String    @default("completed") @db.VarChar(20)
+  // status values: completed | missed | cancelled
+  details     Json?     @db.JsonB
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  baby    Baby     @relation(fields: [babyId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id])
+  routine Routine? @relation(fields: [routineId], references: [id])
+
+  @@index([babyId, eventType])
+  @@index([babyId, occurredAt])
+  @@map("routine_events")
+}
+
+// ─────────────────────────────────────────
+// ROUTINES
+// ─────────────────────────────────────────
+//
+// Configuração de recorrência de atividades do bebê.
+// baby_id → a qual bebê a rotina pertence
+// user_id → quem configurou a rotina
+
+model Routine {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  babyId           String   @map("baby_id") @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  activityType     String   @map("activity_type") @db.VarChar(30)
+  intervalMinutes  Int?     @map("interval_minutes")
+  defaultStartTime String?  @map("default_start_time") @db.VarChar(5) // "HH:MM"
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  baby      Baby           @relation(fields: [babyId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id])
+  events    RoutineEvent[]
+  reminders Reminder[]
+
+  @@map("routines")
+}
+
+// ─────────────────────────────────────────
+// REMINDERS
+// ─────────────────────────────────────────
+//
+// Lembretes de eventos futuros.
+// baby_id  → a qual bebê o lembrete pertence
+// user_id  → quem receberá a notificação push
+//
+// Observação: um lembrete é sempre destinado a um usuário
+// específico. Se todos os cuidadores devem ser notificados,
+// deve-se criar um lembrete por cuidador (gerado pelo Use Case).
+
+model Reminder {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  babyId       String   @map("baby_id") @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  routineId    String?  @map("routine_id") @db.Uuid
+  reminderType String   @map("reminder_type") @db.VarChar(30)
+  description  String   @db.VarChar(255)
+  triggerAt    DateTime @map("trigger_at") @db.Timestamptz
+  recurrence   String?  @db.VarChar(20) // none | daily | interval
+  active       Boolean  @default(true)
+  sent         Boolean  @default(false)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  baby    Baby     @relation(fields: [babyId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id])
+  routine Routine? @relation(fields: [routineId], references: [id])
+
+  @@index([triggerAt, sent, active])
+  @@map("reminders")
+}
+
+// ─────────────────────────────────────────
+// HEALTH RECORDS
+// ─────────────────────────────────────────
+//
+// Histórico de saúde do bebê (consultas, vacinas, medicamentos, exames).
+// baby_id → a quem pertence o registro
+// user_id → quem registrou
+
+model HealthRecord {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  babyId      String   @map("baby_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  recordType  String   @map("record_type") @db.VarChar(30)
+  // appointment | vaccination | medication | exam
+  occurredAt  DateTime @map("occurred_at") @db.Timestamptz
+  title       String   @db.VarChar(150)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  baby Baby @relation(fields: [babyId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([babyId, recordType])
+  @@map("health_records")
+}
+
+// ─────────────────────────────────────────
+// GROWTH MEASUREMENTS
+// ─────────────────────────────────────────
+//
+// Medidas de crescimento do bebê.
+// baby_id → a quem pertence a medida
+// user_id → quem registrou a medida
+
+model GrowthMeasurement {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  babyId              String   @map("baby_id") @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  measuredAt          DateTime @map("measured_at") @db.Date
+  weightKg            Decimal? @map("weight_kg") @db.Decimal(5, 3)
+  heightCm            Decimal? @map("height_cm") @db.Decimal(5, 2)
+  headCircumferenceCm Decimal? @map("head_circumference_cm") @db.Decimal(5, 2)
+  notes               String?  @db.Text
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  baby Baby @relation(fields: [babyId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("growth_measurements")
+}
+
+// ─────────────────────────────────────────
+// NOTES
+// ─────────────────────────────────────────
+//
+// Anotações personalizadas sobre o bebê.
+// baby_id → a quem pertence a anotação
+// user_id → quem escreveu
+
+model Note {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  babyId    String   @map("baby_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  baby Baby @relation(fields: [babyId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("notes")
+}
